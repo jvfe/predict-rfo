@@ -9,11 +9,86 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r read-data, message=FALSE}
 library(readxl)
 library(dplyr)
 library(caret)
 
-dataset <- read_excel("data/Data_v1.xlsx")[-1,]
+dataset <- read_excel("data/Data_v1.xlsx")[-1,] %>% 
+  mutate(RFO = as.double(RFO),
+         TEM = as.double(TEM),
+         # Replace NA with median on PERM
+         PERM = ifelse(is.na(PERM), median(PERM, na.rm = TRUE), PERM))
 ```
+
+## SVM with Radial Basis Function
+
+### Partitioning dataset
+
+```{r data-slice}
+set.seed(1024)
+
+partitioned <- createDataPartition(y = dataset$RFO, p = 0.7, list = FALSE)
+
+training <- dataset[partitioned, -1]
+testing <- dataset[-partitioned, -1]
+
+```
+
+### Train model
+
+```{r train-svm}
+set.seed(2021)
+
+ctrl <- trainControl(
+  method = "cv",
+  number = 10,
+)
+
+tuneGrid <- expand.grid(
+  C = c(0.22, 0.25, 0.4),
+  sigma = 0.122
+)
+
+svm_model <- train(
+  RFO ~ .,
+  data = training,
+  method = "svmRadial",
+  preProcess = c("center", "scale"),
+  trCtrl = ctrl,
+  tuneGrid = tuneGrid
+) 
+```
+
+### Test model
+
+```{r test-svm}
+svm_features <- testing %>% 
+  select(-c(RFO))
+
+svm_target <- testing %>% 
+  pull(RFO)
+
+svm_predictions <- predict(svm_model, newdata = svm_features)  
+```
+
+### SVM results
+
+```{r svm-metrics-2, echo=FALSE}
+svm_rmse <- sqrt(mean((svm_target - svm_predictions) ^ 2))
+
+svm_cor <- cor(svm_target, svm_predictions) ^ 2
+
+svm_metrics_df <- data.frame(RMSE = round(svm_rmse, digits = 2),
+           R2 = round(svm_cor, digits = 2))
+
+knitr::kable(svm_metrics_df, format = "html", table.attr = 'class="table table-striped table-sm"')
+```
+
+```{r svm-resulting metrics}
+
+plot(svm_model)
+
+```
+
 
