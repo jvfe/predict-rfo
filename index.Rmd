@@ -1,0 +1,19 @@
+---
+title: "Predict RFO"
+author: "João Vitor F Cavalcante"
+date: "26/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(dplyr)
+library(caret)
+
+dataset <- read_excel("data/Data_v1.xlsx")[-1,]
+```
+
