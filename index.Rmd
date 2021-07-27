@@ -2,7 +2,12 @@
 title: "Predict RFO"
 author: "João Vitor F Cavalcante"
 date: "26/07/2021"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    theme: united
 ---
 
 ```{r setup, include=FALSE}
@@ -119,7 +124,7 @@ svm_target <- testing %>%
 svm_predictions <- predict(svm_model, newdata = svm_features)  
 ```
 
-### SVM results
+### Results
 
 ```{r svm-metrics-2}
 svm_rmse <- sqrt(mean((svm_target - svm_predictions) ^ 2))
