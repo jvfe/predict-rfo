@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(readxl)
 library(dplyr)
 library(caret)
+library(neuralnet)
 
 dataset <- read_excel("data/Data_v1.xlsx")[-1,] %>% 
   mutate(RFO = as.double(RFO),
@@ -20,8 +21,6 @@ dataset <- read_excel("data/Data_v1.xlsx")[-1,] %>%
          # Replace NA with median on PERM
          PERM = ifelse(is.na(PERM), median(PERM, na.rm = TRUE), PERM))
 ```
-
-## SVM with Radial Basis Function
 
 ### Partitioning dataset
 
@@ -35,7 +34,55 @@ testing <- dataset[-partitioned, -1]
 
 ```
 
-### Train model
+## Linear Regression
+
+### Build model
+
+```{r}
+set.seed(4080)
+
+lm_mod <- lm(RFO ~ ., data = training)
+
+knitr::kable(broom::glance(lm_mod),
+             format = "html",
+             table.attr = 'class="table table-striped table-sm"')
+```
+
+### Test model
+
+```{r}
+lm_predictions <- predict(lm_mod, testing)
+
+actual_preds <- data.frame(cbind(actuals = testing$RFO, predicted = lm_predictions))
+
+knitr::kable(actual_preds,
+             format = "html",
+             table.attr = 'class="table table-striped table-sm"')
+```
+
+### Results
+
+```{r}
+lm_rmse <- sqrt(mean((actual_preds$actuals - actual_preds$predicted) ^ 2))
+lm_correlation <- cor(actual_preds)[1, 2] ^ 2
+minmax_accuracy <- mean(apply(actual_preds, 1, min) / apply(actual_preds, 1, max))
+
+res_summary <-
+  tibble(
+    RMSE = round(lm_rmse, digits = 3),
+    R2 = round(lm_correlation, digits = 3),
+    `MinMax Accuracy` = round(minmax_accuracy, digits = 3)
+  )
+
+knitr::kable(res_summary,
+             format = "html",
+             table.attr = 'class="table table-striped table-sm"')
+```
+
+
+## SVM with Radial Basis Function
+
+### Build model
 
 ```{r train-svm}
 set.seed(2021)
@@ -74,13 +121,13 @@ svm_predictions <- predict(svm_model, newdata = svm_features)
 
 ### SVM results
 
-```{r svm-metrics-2, echo=FALSE}
+```{r svm-metrics-2}
 svm_rmse <- sqrt(mean((svm_target - svm_predictions) ^ 2))
 
 svm_cor <- cor(svm_target, svm_predictions) ^ 2
 
-svm_metrics_df <- data.frame(RMSE = round(svm_rmse, digits = 2),
-           R2 = round(svm_cor, digits = 2))
+svm_metrics_df <- data.frame(RMSE = round(svm_rmse, digits = 3),
+           R2 = round(svm_cor, digits = 3))
 
 knitr::kable(svm_metrics_df, format = "html", table.attr = 'class="table table-striped table-sm"')
 ```
@@ -94,3 +141,51 @@ plot(svm_model)
 ## ANN
 
 ### Build model
+
+```{r}
+set.seed(2048)
+
+maxs <- apply(dataset[, -1], 2, max)
+mins <- apply(dataset[, -1], 2, min)
+
+training_scaled <- as.data.frame(scale(training, center = mins,
+                                      scale = maxs - mins))
+testing_scaled <- as.data.frame(scale(testing, center = mins,
+                                      scale = maxs - mins))
+nn <- neuralnet(
+  RFO ~ .,
+  data = training_scaled,
+  hidden = c(8, 5, 3),
+  linear.output = TRUE
+)
+```
+
+### Test model
+
+```{r}
+# Computing RMSE
+pr_nn <- predict(nn, testing_scaled)
+
+pr_nn_predicted <- pr_nn * (max(dataset$RFO) - min(dataset$RFO) + min(dataset$RFO))
+
+nn_RMSE <- sqrt(mean((testing$RFO - pr_nn_predicted) ^ 2))
+nn_cor <-  cor(testing$RFO, pr_nn_predicted) ^ 2
+```
+
+### Results
+
+```{r}
+nn_metrics <- tibble(
+  RMSE = round(nn_RMSE, digits = 3),
+  R2 = round(nn_cor, digits = 3)
+)
+
+knitr::kable(nn_metrics, format = "html", table.attr = 'class="table table-striped table-sm"')
+```
+
+
+```{r}
+plot(testing$RFO, pr_nn_predicted, col = "red",
+     main = 'Real vs Predicted', xlab = "Real", ylab = "Predicted")
+abline(0, 1, lwd = 2)
+```
